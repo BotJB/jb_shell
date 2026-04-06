@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include "string_utils.h"
+#include <unistd.h>
 
 //defining the prototypes here 
 void cmd_type(char **args);
@@ -52,12 +53,39 @@ void cmd_type(char **args){
         if(strcmp(args[1],commands[i].name)==0){
             printf("%s is a shell builtin\n",args[1]);
             found=1;
-            break;
+            return;
         }
     }
+    //we search for the path here to see if it is the executable
+    char *env=getenv("PATH");
+    //created a local copy to tokenize
+    char *dirP=duplicateString(env);
+    char *token=strtok(dirP,":");
+    while(token!=NULL){
+        int length=strlen(token)+strlen(args[1])+2;
+        char *full_path=malloc(length);
+        strcpy(full_path,token);
+        strcat(full_path,"/");
+        strcat(full_path,args[1]);
+
+        //check if executable
+        if(access(full_path,X_OK)==0){
+          printf("%s is %s\n",args[1],full_path);  
+          found=1;
+          free(full_path);
+          break;
+        }
+        token=strtok(NULL,":");
+
+    free(full_path);
+    }
+
+    
+
     if(!found){
         printf("%s : not found\n",args[1]);
     }
+    free(dirP);
 }
 
 

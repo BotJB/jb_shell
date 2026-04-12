@@ -3,11 +3,12 @@
 #include <string.h>
 #include "string_utils.h"
 #include <unistd.h>
-
+#include <sys/wait.h>
 //defining the prototypes here 
 void cmd_type(char **args);
 void cmd_echo(char **args);
 void cmd_exit(char **args);
+void cmd_external(char **args);
 
 // struct to defin the how the command should look like 
 typedef struct Command{
@@ -16,14 +17,25 @@ typedef struct Command{
 }  Command_t;
 
 
+Command_t commands[]={
+    {"echo",cmd_echo},
+    {"exit",cmd_exit},
+    {"type",cmd_type}
+};
+
+/* This is just to sanitize after getting the string from fgets
+*/
 void sanitizeCommand(char *string){
  string[strcspn(string,"\n")]='\0';
 }
+
 //Commands 
+
+//Exit command 
 void cmd_exit(char **args){
     exit(0);
 }
-
+//Echo command 
 void cmd_echo(char **args){
     
     int i=1;
@@ -36,12 +48,6 @@ void cmd_echo(char **args){
     
 }
 
-
-Command_t commands[]={
-    {"echo",cmd_echo},
-    {"exit",cmd_exit},
-    {"type",cmd_type}
-};
 
 void cmd_type(char **args){
     if(args[1]==NULL){
@@ -56,6 +62,7 @@ void cmd_type(char **args){
             return;
         }
     }
+    
     //we search for the path here to see if it is the executable
     char *env=getenv("PATH");
     //created a local copy to tokenize
@@ -71,21 +78,37 @@ void cmd_type(char **args){
         //check if executable
         if(access(full_path,X_OK)==0){
           printf("%s is %s\n",args[1],full_path);  
-          found=1;
           free(full_path);
-          break;
+          found=1;
+          break;        
         }
         token=strtok(NULL,":");
 
     free(full_path);
     }
-
-    
-
-    if(!found){
-        printf("%s : not found\n",args[1]);
+    free(dirP); 
+    if(found==0){
+    printf("%s : Command not found",args[1]);
     }
-    free(dirP);
+   }
+
+
+void cmd_external(char **args){
+    pid_t pid=fork();
+
+    if(pid<0){
+     printf("Fork failed\n");
+     return; 
+    } 
+    else if(pid==0){
+        execvp(args[0],args);
+        perror("command not found\n");
+        exit(127) ;
+    }
+    else{
+    wait(NULL);
+    }
+    return;
 }
 
 
@@ -102,7 +125,7 @@ int main(int argc, char *argv[]) {
         fgets(command,sizeof(command),stdin);
         sanitizeCommand(command);
         //slpit the command
-        char *args[10];
+        char *args[100];
         int i=0;
         char *token=strtok(command," ");
         while(token!=NULL){
@@ -128,15 +151,16 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-   if(found!=0){
-      printf("{%s} : Command not found\n",args[0]);
-    }
+  if(found==0){
+    continue;
+  }
+  else{
+    cmd_external(args);
+  }
 
   }
-  
-
-
   return 0;
+
 }
 
 
